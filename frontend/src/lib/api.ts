@@ -8,15 +8,30 @@ export interface AnalyzeResponse {
   emoji: string;
 }
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
+function getApiBaseUrl(): string {
+  const fromEnv = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "");
+  if (fromEnv) return fromEnv;
+
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    const isLocal =
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host.endsWith(".local");
+    if (!isLocal) {
+      return "/_/backend";
+    }
+  }
+
+  return "http://127.0.0.1:8000";
+}
 
 export async function analyzeComment(text: string): Promise<{
   sentiment: Sentiment;
   rawLabel: string;
   confidence: number;
 }> {
-  const response = await fetch(`${API_BASE_URL}/analyze`, {
+  const response = await fetch(`${getApiBaseUrl()}/analyze`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
