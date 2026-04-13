@@ -18,7 +18,9 @@ export const metadata: Metadata = {
   description:
     "See how Kawn reads the vibe of every comment—demo experience.",
   icons: {
-    icon: branding.favicon,
+    icon: [{ url: branding.favicon, type: "image/png" }],
+    apple: branding.favicon,
+    shortcut: branding.favicon,
   },
 };
 
