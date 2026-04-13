@@ -1,9 +1,12 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.schemas import AnalyzeRequest, AnalyzeResponse
-from app.sentiment_service import MODEL_NAME, analyze_sentiment
-
+from app.sentiment_service import (
+    MODEL_NAME,
+    analyze_sentiment,
+    inference_token_configured,
+)
 
 app = FastAPI(
     title="Kawn Sentiment Analysis API",
@@ -29,10 +32,17 @@ def health():
     return {
         "status": "ok",
         "model": MODEL_NAME,
+        "inference": "huggingface-inference-api",
+        "token_configured": inference_token_configured(),
     }
 
 
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze(payload: AnalyzeRequest):
-    result = analyze_sentiment(payload.text.strip())
+    try:
+        result = analyze_sentiment(payload.text.strip())
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
     return AnalyzeResponse(text=payload.text.strip(), **result)
