@@ -1,3 +1,6 @@
+from pathlib import Path
+
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -7,6 +10,8 @@ from app.sentiment_service import (
     analyze_sentiment,
     inference_token_configured,
 )
+
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 app = FastAPI(
     title="Kawn Sentiment Analysis API",

@@ -26,21 +26,47 @@ function getApiBaseUrl(): string {
   return "http://127.0.0.1:8000";
 }
 
+async function readErrorMessage(response: Response): Promise<string> {
+  try {
+    const body = (await response.json()) as { detail?: unknown };
+    const d = body.detail;
+    if (typeof d === "string") return d;
+    if (Array.isArray(d) && d[0] && typeof d[0] === "object" && d[0] !== null && "msg" in d[0]) {
+      return String((d[0] as { msg: string }).msg);
+    }
+  } catch {
+    /* ignore */
+  }
+  return `Request failed (${response.status}).`;
+}
+
 export async function analyzeComment(text: string): Promise<{
   sentiment: Sentiment;
   rawLabel: string;
   confidence: number;
 }> {
-  const response = await fetch(`${getApiBaseUrl()}/analyze`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ text }),
-  });
+  const base = getApiBaseUrl();
+  let response: Response;
+  try {
+    response = await fetch(`${base}/analyze`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ text }),
+    });
+  } catch {
+    throw new Error(
+      `Cannot reach the API at ${base}. Start the backend (uvicorn) and check the port matches NEXT_PUBLIC_API_BASE_URL if you use a non-default port.`,
+    );
+  }
 
   if (!response.ok) {
-    throw new Error("Unable to analyze comment right now.");
+    const detail = await readErrorMessage(response);
+    throw new Error(
+      detail ||
+        "Unable to analyze comment right now. For local runs, set HF_API_TOKEN on the backend and open /health to verify.",
+    );
   }
 
   const data = (await response.json()) as AnalyzeResponse;
