@@ -51,7 +51,7 @@ export function CommentCard({
             </p>
             {typeof comment.confidence === "number" ? (
               <p className="mt-3 text-xs text-zinc-500">
-                Confidence {Math.round(comment.confidence * 100)}%
+                Confidence {(comment.confidence * 100).toFixed(1)}%
               </p>
             ) : null}
           </div>

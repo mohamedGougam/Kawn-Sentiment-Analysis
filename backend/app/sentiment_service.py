@@ -3,8 +3,13 @@ from typing import TypedDict
 
 from huggingface_hub import InferenceClient
 
-MODEL_NAME = "distilbert/distilbert-base-uncased-finetuned-sst-2-english"
-NEUTRAL_CONFIDENCE_THRESHOLD = 0.75
+# SST-2 is trained on movie reviews and tends to be overconfident on social comments.
+# This model is a better fit for short, informal text and includes an explicit neutral class.
+MODEL_NAME = "cardiffnlp/twitter-roberta-base-sentiment-latest"
+
+# We report "confidence" as the gap between the top class probability and the runner-up.
+# This is generally more realistic than raw top probability for UI display.
+NEUTRAL_CONFIDENCE_THRESHOLD = 0.10
 
 
 class SentimentResult(TypedDict):
@@ -29,20 +34,27 @@ def _to_sentiment_result(raw_label: str, confidence: float) -> SentimentResult:
             "raw_label": "NEUTRAL",
             "confidence": confidence,
             "kawn_label": "Neutral",
-            "emoji": "\N{NEUTRAL FACE}",
+            "emoji": "😐",
         }
-    if label == "POSITIVE":
+    if label in {"POSITIVE", "LABEL_2"}:
         return {
             "raw_label": "POSITIVE",
             "confidence": confidence,
             "kawn_label": "Positive vibes",
-            "emoji": "\N{SMILING FACE WITH SMILING EYES}",
+            "emoji": "😊",
+        }
+    if label in {"NEUTRAL", "LABEL_1"}:
+        return {
+            "raw_label": "NEUTRAL",
+            "confidence": confidence,
+            "kawn_label": "Neutral",
+            "emoji": "😐",
         }
     return {
         "raw_label": "NEGATIVE",
         "confidence": confidence,
         "kawn_label": "Negative vibes",
-        "emoji": "\N{CONFUSED FACE}",
+        "emoji": "😕",
     }
 
 
@@ -59,7 +71,15 @@ def analyze_sentiment(text: str) -> SentimentResult:
     if not outputs:
         raise ValueError("No classification output returned by Hugging Face.")
 
-    top = max(outputs, key=lambda x: float(x.score))
+    # Convert to sortable list (HF may return any order).
+    ranked = sorted(outputs, key=lambda x: float(x.score), reverse=True)
+    top = ranked[0]
+    second = ranked[1] if len(ranked) > 1 else None
+
     raw_label = str(top.label).upper()
-    confidence = float(top.score)
+    top_score = float(top.score)
+    second_score = float(second.score) if second is not None else 0.0
+
+    # "confidence" = separation from the runner-up, in [0, 1].
+    confidence = max(0.0, min(1.0, top_score - second_score))
     return _to_sentiment_result(raw_label, confidence)
