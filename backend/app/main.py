@@ -1,6 +1,6 @@
+import logging
 from pathlib import Path
 
-from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -9,9 +9,16 @@ from app.sentiment_service import (
     MODEL_NAME,
     analyze_sentiment,
     inference_token_configured,
+    _local_fallback,
 )
 
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+logger = logging.getLogger("kawn.sentiment")
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+except ImportError:
+    pass
 
 app = FastAPI(
     title="Kawn Sentiment Analysis API",
@@ -37,17 +44,19 @@ def health():
     return {
         "status": "ok",
         "model": MODEL_NAME,
-        "inference": "huggingface-inference-api",
+        "inference": "huggingface-inference-api-with-local-fallback",
         "token_configured": inference_token_configured(),
     }
 
 
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze(payload: AnalyzeRequest):
+    text = (payload.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Text cannot be empty.")
     try:
-        result = analyze_sentiment(payload.text.strip())
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e)) from e
-    except ValueError as e:
-        raise HTTPException(status_code=502, detail=str(e)) from e
-    return AnalyzeResponse(text=payload.text.strip(), **result)
+        result = analyze_sentiment(text)
+    except Exception as e:
+        logger.exception("Unexpected error during sentiment analysis: %s. Using local fallback.", e)
+        result = _local_fallback(text)
+    return AnalyzeResponse(text=text, **result)
